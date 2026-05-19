@@ -4,6 +4,8 @@ import (
 	"encoding/json" // JSON 编解码
 	"fmt"           // 格式化输出
 	"net/http"      // HTTP 服务器和客户端
+	"strconv"       // 字符串和数字互转
+	"strings"       // 字符串处理
 	"time"          // 时间处理
 )
 
@@ -87,6 +89,52 @@ func handleListTodos(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, list)
 }
 
+// handleTodoByID 处理 /todos/{id} 路径
+// 从 URL 中提取 ID，然后根据方法分发
+// 比如请求 GET /todos/3，提取出 id=3，然后调 handleGetTodo
+func handleTodoByID(w http.ResponseWriter, r *http.Request) {
+	// 从路径中提取 ID
+	// r.URL.Path 是 "/todos/3"，去掉前缀 "/todos/" 得到 "3"
+	idStr := strings.TrimPrefix(r.URL.Path, "/todos/")
+
+	// 把字符串 "3" 转成数字 3
+	// strconv.Atoi = "ASCII to Integer"
+	id, err := strconv.Atoi(idStr)
+	if err != nil {
+		writeJSON(w, http.StatusBadRequest, ErrorResponse{
+			Code:    "INVALID_ID",
+			Message: "id must be a number",
+		})
+		return
+	}
+
+	switch r.Method {
+	case http.MethodGet:
+		handleGetTodo(w, r, id)
+	default:
+		writeJSON(w, http.StatusMethodNotAllowed, ErrorResponse{
+			Code:    "METHOD_NOT_ALLOWED",
+			Message: "use GET",
+		})
+	}
+}
+
+// handleGetTodo 处理 GET /todos/{id}，返回单个 Todo
+func handleGetTodo(w http.ResponseWriter, r *http.Request, id int) {
+	// 从 map 中查找，ok 表示是否找到
+	todo, ok := todos[id]
+	if !ok {
+		// 找不到 → 404 Not Found
+		writeJSON(w, http.StatusNotFound, ErrorResponse{
+			Code:    "NOT_FOUND",
+			Message: fmt.Sprintf("todo %d not found", id),
+		})
+		return
+	}
+	// 找到了 → 200 + Todo 数据
+	writeJSON(w, http.StatusOK, todo)
+}
+
 // handleCreateTodo 处理 POST /todos，创建一个新的 Todo
 func handleCreateTodo(w http.ResponseWriter, r *http.Request) {
 	// 第一步：读取请求体，把 JSON 解析成 CreateTodoRequest 结构体
@@ -137,6 +185,9 @@ func main() {
 	})
 	// /todos 支持 GET（列出）和 POST（创建）
 	http.HandleFunc("/todos", handleTodos)
+	// /todos/ 带斜杠的路径会匹配 /todos/1、/todos/2 等
+	// Go 标准库的规则：/todos/ 匹配所有以它为前缀的路径
+	http.HandleFunc("/todos/", handleTodoByID)
 
 	// 启动 HTTP 服务器，监听 9090 端口
 	// 这行会阻塞（一直运行），持续等待并处理请求
