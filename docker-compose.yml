@@ -1,0 +1,24 @@
+# docker-compose：一键启动 Prometheus + Grafana
+# 用法：docker compose up -d
+# learn-api 仍然在本机用 go run 启动
+
+services:
+  # Prometheus：负责采集和存储指标
+  prometheus:
+    image: prom/prometheus:latest
+    ports:
+      - "9091:9090"             # 映射到宿主机 9091（9090 被 learn-api 占了）
+    volumes:
+      - ./prometheus.yml:/etc/prometheus/prometheus.yml  # 挂载配置文件
+    # Mac/Windows 的 Docker Desktop 支持 host.docker.internal
+    # Linux 需要加 extra_hosts
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+
+  # Grafana：负责可视化展示
+  grafana:
+    image: grafana/grafana:latest
+    ports:
+      - "3000:3000"             # 访问 http://localhost:3000
+    environment:
+      - GF_SECURITY_ADMIN_PASSWORD=admin   # 默认密码 admin

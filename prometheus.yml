@@ -1,0 +1,11 @@
+# Prometheus 配置文件
+# 告诉 Prometheus 去哪里抓指标
+global:
+  scrape_interval: 5s    # 每 5 秒抓一次（生产环境通常 15-30 秒）
+
+scrape_configs:
+  - job_name: "learn-api"
+    # host.docker.internal 是 Docker 容器访问宿主机的特殊地址
+    # 因为 learn-api 跑在宿主机上，不是 Docker 里
+    static_configs:
+      - targets: ["host.docker.internal:9090"]

@@ -210,6 +210,7 @@ func handleDeleteTodo(w http.ResponseWriter, r *http.Request, id int) {
 	}
 	// 从 map 中删除
 	delete(todos, id)
+	todosTotal.Dec() // 指标：当前 Todo 数 -1
 	// 204 No Content：删除成功，不返回任何内容
 	w.WriteHeader(http.StatusNoContent)
 }
@@ -294,6 +295,7 @@ func handleCreateTodo(w http.ResponseWriter, r *http.Request) {
 	}
 	todos[nextID] = todo // 存进 map
 	nextID++             // ID 自增，下一个 Todo 用下一个数字
+	todosTotal.Inc()     // 指标：当前 Todo 数 +1
 
 	// 第四步：返回创建好的 Todo
 	// 201 Created 表示"资源已成功创建"，比 200 OK 更精确
@@ -306,10 +308,12 @@ func main() {
 	// 注册路由：路径 → 处理函数
 	// /healthz 是健康检查接口，Kubernetes 用它判断服务是否存活
 	http.HandleFunc("/healthz", handleHealthz)
-	// /todos 和 /todos/{id} 用 requireAuth 包裹，需要认证才能访问
-	// /healthz 不包裹，任何人都能调（Kubernetes 健康检查不带 Key）
-	http.HandleFunc("/todos", requireAuth(handleTodos))
-	http.HandleFunc("/todos/", requireAuth(handleTodoByID))
+	// /metrics 是 Prometheus 指标端点，Prometheus 定时来拉数据
+	http.Handle("/metrics", metricsHandler())
+	// /todos 和 /todos/{id} 用 requireAuth + metricsMiddleware 包裹
+	// 中间件可以嵌套：先过 metrics（记录指标），再过 auth（检查认证）
+	http.HandleFunc("/todos", metricsMiddleware(requireAuth(handleTodos)))
+	http.HandleFunc("/todos/", metricsMiddleware(requireAuth(handleTodoByID)))
 
 	// 启动 HTTP 服务器，监听 9090 端口
 	// 这行会阻塞（一直运行），持续等待并处理请求
