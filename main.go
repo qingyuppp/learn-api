@@ -112,6 +112,11 @@ func requireAuth(next http.HandlerFunc) http.HandlerFunc {
 
 // ---------- Handler（处理函数） ----------
 
+// handleHealthz 处理 GET /healthz，返回服务健康状态
+func handleHealthz(w http.ResponseWriter, r *http.Request) {
+	writeJSON(w, http.StatusOK, map[string]string{"status": "ok"})
+}
+
 // handleTodos 是 /todos 路径的入口
 // 根据 HTTP 方法分发到不同的处理函数：
 //   GET  /todos → 列出所有 Todo
@@ -300,9 +305,7 @@ func handleCreateTodo(w http.ResponseWriter, r *http.Request) {
 func main() {
 	// 注册路由：路径 → 处理函数
 	// /healthz 是健康检查接口，Kubernetes 用它判断服务是否存活
-	http.HandleFunc("/healthz", func(w http.ResponseWriter, r *http.Request) {
-		writeJSON(w, http.StatusOK, map[string]string{"status": "ok"})
-	})
+	http.HandleFunc("/healthz", handleHealthz)
 	// /todos 和 /todos/{id} 用 requireAuth 包裹，需要认证才能访问
 	// /healthz 不包裹，任何人都能调（Kubernetes 健康检查不带 Key）
 	http.HandleFunc("/todos", requireAuth(handleTodos))
