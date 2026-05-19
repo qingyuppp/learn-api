@@ -111,10 +111,12 @@ func handleTodoByID(w http.ResponseWriter, r *http.Request) {
 	switch r.Method {
 	case http.MethodGet:
 		handleGetTodo(w, r, id)
+	case http.MethodDelete:
+		handleDeleteTodo(w, r, id)
 	default:
 		writeJSON(w, http.StatusMethodNotAllowed, ErrorResponse{
 			Code:    "METHOD_NOT_ALLOWED",
-			Message: "use GET",
+			Message: "use GET or DELETE",
 		})
 	}
 }
@@ -133,6 +135,22 @@ func handleGetTodo(w http.ResponseWriter, r *http.Request, id int) {
 	}
 	// 找到了 → 200 + Todo 数据
 	writeJSON(w, http.StatusOK, todo)
+}
+
+// handleDeleteTodo 处理 DELETE /todos/{id}，删除一个 Todo
+func handleDeleteTodo(w http.ResponseWriter, r *http.Request, id int) {
+	// 先检查是否存在
+	if _, ok := todos[id]; !ok {
+		writeJSON(w, http.StatusNotFound, ErrorResponse{
+			Code:    "NOT_FOUND",
+			Message: fmt.Sprintf("todo %d not found", id),
+		})
+		return
+	}
+	// 从 map 中删除
+	delete(todos, id)
+	// 204 No Content：删除成功，不返回任何内容
+	w.WriteHeader(http.StatusNoContent)
 }
 
 // handleCreateTodo 处理 POST /todos，创建一个新的 Todo
