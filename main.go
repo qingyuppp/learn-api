@@ -4,6 +4,7 @@ import (
 	"encoding/json" // JSON 编解码
 	"fmt"           // 格式化输出
 	"net/http"      // HTTP 服务器和客户端
+	"os"            // 读取环境变量
 	"strconv"       // 字符串和数字互转
 	"strings"       // 字符串处理
 	"time"          // 时间处理
@@ -60,6 +61,53 @@ func writeJSON(w http.ResponseWriter, code int, data any) {
 	w.Header().Set("Content-Type", "application/json") // 告诉客户端返回的是 JSON
 	w.WriteHeader(code)                                 // 写 HTTP 状态码（200、400、500...）
 	json.NewEncoder(w).Encode(data)                     // 把 data 结构体编码成 JSON 写进响应
+}
+
+// ---------- 中间件 ----------
+
+// requireAuth 是一个中间件，检查请求头中的 API Key
+// 它接收一个 handler，返回一个新的 handler（包了一层认证检查）
+//
+// 使用方式：
+//   http.HandleFunc("/todos", requireAuth(handleTodos))
+//   原来直接注册 handleTodos，现在用 requireAuth 包一层
+//
+// 调用链：请求进来 → requireAuth 检查 Key → 通过 → 调用原始 handler
+//                                         → 不通过 → 返回 401
+func requireAuth(next http.HandlerFunc) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		// 从环境变量读取期望的 API Key
+		// 这样 Key 不会写死在代码里（安全）
+		expected := os.Getenv("API_KEY")
+
+		// 如果没配置 API Key（环境变量为空），跳过认证
+		if expected == "" {
+			next(w, r)
+			return
+		}
+
+		// 从请求头中取客户端传来的 Key
+		provided := r.Header.Get("X-API-Key")
+		if provided == "" {
+			writeJSON(w, http.StatusUnauthorized, ErrorResponse{
+				Code:    "MISSING_API_KEY",
+				Message: "provide API key via X-API-Key header",
+			})
+			return
+		}
+
+		// 比较 Key 是否正确
+		if provided != expected {
+			writeJSON(w, http.StatusUnauthorized, ErrorResponse{
+				Code:    "INVALID_API_KEY",
+				Message: "invalid API key",
+			})
+			return
+		}
+
+		// 认证通过，调用原始 handler
+		next(w, r)
+	}
 }
 
 // ---------- Handler（处理函数） ----------
@@ -255,11 +303,10 @@ func main() {
 	http.HandleFunc("/healthz", func(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusOK, map[string]string{"status": "ok"})
 	})
-	// /todos 支持 GET（列出）和 POST（创建）
-	http.HandleFunc("/todos", handleTodos)
-	// /todos/ 带斜杠的路径会匹配 /todos/1、/todos/2 等
-	// Go 标准库的规则：/todos/ 匹配所有以它为前缀的路径
-	http.HandleFunc("/todos/", handleTodoByID)
+	// /todos 和 /todos/{id} 用 requireAuth 包裹，需要认证才能访问
+	// /healthz 不包裹，任何人都能调（Kubernetes 健康检查不带 Key）
+	http.HandleFunc("/todos", requireAuth(handleTodos))
+	http.HandleFunc("/todos/", requireAuth(handleTodoByID))
 
 	// 启动 HTTP 服务器，监听 9090 端口
 	// 这行会阻塞（一直运行），持续等待并处理请求
