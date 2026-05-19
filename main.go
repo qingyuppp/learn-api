@@ -29,6 +29,12 @@ type CreateTodoRequest struct {
 	Title string `json:"title"`
 }
 
+// UpdateTodoRequest 定义了更新 Todo 时客户端可以发什么
+// 客户端发 {"status": "doing"}，表示要把状态改成 doing
+type UpdateTodoRequest struct {
+	Status string `json:"status"`
+}
+
 // ErrorResponse 是统一的错误响应格式
 // 所有错误都返回这个结构，客户端可以统一处理
 type ErrorResponse struct {
@@ -113,10 +119,12 @@ func handleTodoByID(w http.ResponseWriter, r *http.Request) {
 		handleGetTodo(w, r, id)
 	case http.MethodDelete:
 		handleDeleteTodo(w, r, id)
+	case http.MethodPatch:
+		handleUpdateTodo(w, r, id)
 	default:
 		writeJSON(w, http.StatusMethodNotAllowed, ErrorResponse{
 			Code:    "METHOD_NOT_ALLOWED",
-			Message: "use GET or DELETE",
+			Message: "use GET, DELETE or PATCH",
 		})
 	}
 }
@@ -151,6 +159,52 @@ func handleDeleteTodo(w http.ResponseWriter, r *http.Request, id int) {
 	delete(todos, id)
 	// 204 No Content：删除成功，不返回任何内容
 	w.WriteHeader(http.StatusNoContent)
+}
+
+// validTransitions 定义了合法的状态转换
+// key 是当前状态，value 是允许转换到的下一个状态
+// pending → doing → done，不能跳跃，不能倒退
+var validTransitions = map[string]string{
+	"pending": "doing",
+	"doing":   "done",
+}
+
+// handleUpdateTodo 处理 PATCH /todos/{id}，更新 Todo 的状态
+func handleUpdateTodo(w http.ResponseWriter, r *http.Request, id int) {
+	// 第一步：检查 Todo 是否存在
+	todo, ok := todos[id]
+	if !ok {
+		writeJSON(w, http.StatusNotFound, ErrorResponse{
+			Code:    "NOT_FOUND",
+			Message: fmt.Sprintf("todo %d not found", id),
+		})
+		return
+	}
+
+	// 第二步：读取请求体
+	var req UpdateTodoRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeJSON(w, http.StatusBadRequest, ErrorResponse{
+			Code:    "INVALID_JSON",
+			Message: "request body is not valid JSON",
+		})
+		return
+	}
+
+	// 第三步：验证状态转换是否合法
+	// 比如当前是 pending，只能转到 doing；不能直接跳到 done
+	nextStatus, exists := validTransitions[todo.Status]
+	if !exists || nextStatus != req.Status {
+		writeJSON(w, http.StatusBadRequest, ErrorResponse{
+			Code:    "INVALID_TRANSITION",
+			Message: fmt.Sprintf("cannot change from %q to %q", todo.Status, req.Status),
+		})
+		return
+	}
+
+	// 第四步：更新状态
+	todo.Status = req.Status
+	writeJSON(w, http.StatusOK, todo)
 }
 
 // handleCreateTodo 处理 POST /todos，创建一个新的 Todo
