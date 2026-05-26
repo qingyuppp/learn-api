@@ -43,6 +43,18 @@ API_KEY=my-secret-key go run main.go
 go test -v
 ```
 
+## 参考资料
+
+学习时从以下来源出发，各 learn-\* 项目共用同一套资料，不重复引入其他解释。
+
+| 来源 | 用途 |
+|------|------|
+| [Go by Example 中文](https://gobyexample-cn.github.io/) | HTTP Server/Client、JSON、中间件等用法的第一手示例 |
+| [OSTEP 中文](https://pages.cs.wisc.edu/~remzi/OSTEP/Chinese/) | 进程、网络 I/O 等底层概念的理论依据（按需查阅）|
+| [OpenSandbox](https://github.com/alibaba/OpenSandbox) | 真实 API 设计参考：server 路由结构、认证中间件、生命周期接口 |
+| [containerd](https://github.com/containerd/containerd) | 生产级 Go HTTP 服务端代码参考（learn-linux/learn-k8s 阶段深入）|
+| [kata-containers](https://github.com/kata-containers/kata-containers) | VM 容器运行时代码参考（learn-linux/learn-k8s 阶段深入）|
+
 ## 试用
 
 ```bash
